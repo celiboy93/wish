@@ -2,62 +2,40 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 serve(async (req) => {
   const reqUrl = new URL(req.url);
-  const targetUrl = reqUrl.searchParams.get("url");
+  const urlParam = reqUrl.searchParams.get("url");
 
-  // ၁။ Link မပါရင် "Home Page (Generator UI)" ကို ပြမယ်
-  if (!targetUrl) {
-    const html = `
+  // ၁။ UI - Link Generator
+  if (!urlParam) {
+     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>StreamWish Proxy Generator</title>
+        <title>HgLink/StreamWish Unblocker</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-          body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background: #f4f4f9; }
-          .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-          h2 { text-align: center; color: #333; }
-          input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-          button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
-          button:hover { background: #218838; }
-          .result-box { margin-top: 20px; display: none; }
-          textarea { width: 100%; height: 80px; padding: 10px; border-radius: 5px; border: 1px dashed #666; background: #e9ecef; font-family: monospace; }
-          .note { font-size: 12px; color: #666; margin-top: 5px; text-align: center; }
+          body { font-family: sans-serif; padding: 20px; background: #111; color: white; text-align: center; }
+          input { width: 90%; padding: 12px; border-radius: 5px; border: none; margin-bottom: 10px; }
+          button { padding: 12px 20px; background: #e50914; color: white; border: none; border-radius: 5px; font-weight: bold; }
+          textarea { width: 90%; height: 100px; margin-top: 20px; background: #222; color: #0f0; border: 1px solid #444; }
         </style>
       </head>
       <body>
-        <div class="card">
-          <h2>🚀 StreamWish Proxy Link</h2>
-          <label>Paste 'hglink.to' or 'streamwish' link:</label>
-          <input type="text" id="inputUrl" placeholder="https://hglink.to/e/xxxxxx">
-          
-          <button onclick="generate()">Generate Proxy Link 🔄</button>
-
-          <div class="result-box" id="resultArea">
-            <label>✅ Copy this link for APK:</label>
-            <textarea id="outputLink" readonly></textarea>
-            <p class="note">This link works WITHOUT VPN!</p>
-            <button onclick="copy()" style="background:#007bff; margin-top:5px;">Copy Link</button>
-          </div>
+        <h3>🚀 StreamWish/HgLink Proxy</h3>
+        <input type="text" id="inputUrl" placeholder="Paste link here (e.g., https://hglink.to/e/xxxx)">
+        <br>
+        <button onclick="generate()">Generate APK Link</button>
+        <div id="result" style="display:none;">
+          <p>👇 Copy this link for your APK:</p>
+          <textarea id="output"></textarea>
+          <p style="color:yellow; font-size:12px;">No VPN Needed!</p>
         </div>
-
         <script>
           function generate() {
-            const input = document.getElementById('inputUrl').value.trim();
-            if (!input) return alert("Please enter a link!");
-            
-            // Deno Link ကို ဖန်တီးခြင်း
-            const currentDomain = window.location.origin;
-            const finalLink = currentDomain + "/?url=" + input;
-            
-            document.getElementById('outputLink').value = finalLink;
-            document.getElementById('resultArea').style.display = 'block';
-          }
-
-          function copy() {
-            const copyText = document.getElementById("outputLink");
-            copyText.select();
-            document.execCommand("copy");
-            alert("Copied to clipboard! 📋");
+            const raw = document.getElementById('inputUrl').value.trim();
+            if(!raw) return alert("Link ထည့်ပါ!");
+            const final = window.location.origin + "/?url=" + raw;
+            document.getElementById('output').value = final;
+            document.getElementById('result').style.display = 'block';
           }
         </script>
       </body>
@@ -66,57 +44,74 @@ serve(async (req) => {
     return new Response(html, { headers: { "content-type": "text/html" } });
   }
 
-  // ၂။ Link ပါလာရင် Proxy အလုပ်လုပ်မယ် (အရင်ကုဒ်အတိုင်း)
+  // ၂။ Proxy Engine Start
   try {
-    // A. TS Segment / M3U8 Direct
-    if (targetUrl.includes(".ts") || targetUrl.includes(".m3u8")) {
-       const videoRes = await fetch(targetUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://streamwish.com/",
-            "Origin": "https://streamwish.com/"
-          }
-       });
-       
-       if (targetUrl.includes(".m3u8")) {
-         const text = await videoRes.text();
-         const myDenoUrl = reqUrl.origin + "/?url=";
-         
-         const modifiedText = text.replace(/^(?!#)(.*)$/gm, (match) => {
-            if (match.startsWith("http")) return myDenoUrl + encodeURIComponent(match);
-            const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            return myDenoUrl + encodeURIComponent(baseUrl + match);
-         });
+    let targetUrl = urlParam;
 
-         return new Response(modifiedText, {
-            headers: { "Content-Type": "application/vnd.apple.mpegurl", "Access-Control-Allow-Origin": "*" }
-         });
-       }
-
-       return new Response(videoRes.body, {
-          status: videoRes.status,
-          headers: videoRes.headers,
-       });
+    // 🔥 HGLINK ဖြစ်နေရင် StreamWish ID ကို ဆွဲထုတ်ပြီး URL အစစ်ပြောင်းမယ်
+    // (ဒါမှ အခွံကို ကျော်ပြီး Video ဆီ တန်းရောက်မှာပါ)
+    if (targetUrl.includes("hglink.to")) {
+        // ID ကို ယူမယ် (ဥပမာ: 3p4kyioul8pg)
+        const idMatch = targetUrl.match(/\/e\/([a-zA-Z0-9]+)/);
+        if (idMatch && idMatch[1]) {
+            // StreamWish Embed Link အစစ်ကို ပြောင်းမယ်
+            targetUrl = `https://streamwish.com/e/${idMatch[1]}`; 
+        }
     }
 
-    // B. Embed Link Scraping (hglink.to)
-    const embedRes = await fetch(targetUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36" }
+    // A. အကယ်၍ M3U8 ဖိုင် (သို့) TS ဖိုင် ဖြစ်နေရင် Proxy လုပ်ပေးမယ်
+    if (targetUrl.includes(".m3u8") || targetUrl.includes(".ts")) {
+        const videoRes = await fetch(targetUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/100.0.0.0 Safari/537.36",
+                "Referer": "https://streamwish.com/",
+                "Origin": "https://streamwish.com/"
+            }
+        });
+
+        if (targetUrl.includes(".m3u8")) {
+            const text = await videoRes.text();
+            const myDomain = reqUrl.origin + "/?url=";
+            // M3U8 ထဲက လင့်ခ်တွေကို Deno Proxy ဆီ လမ်းကြောင်းလွှဲမယ်
+            const fixedText = text.replace(/^(?!#)(.*)$/gm, (m) => {
+                if (m.startsWith("http")) return myDomain + encodeURIComponent(m);
+                return myDomain + encodeURIComponent(targetUrl.substring(0, targetUrl.lastIndexOf('/')+1) + m);
+            });
+            return new Response(fixedText, { 
+                headers: { "Content-Type": "application/vnd.apple.mpegurl", "Access-Control-Allow-Origin": "*" } 
+            });
+        }
+        return new Response(videoRes.body, { headers: videoRes.headers });
+    }
+
+    // B. Website (Embed Page) ဖြစ်နေရင် HTML ထဲက M3U8 ကို ရှာမယ်
+    const pageRes = await fetch(targetUrl, {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/100.0.0.0 Safari/537.36",
+            "Referer": "https://hglink.to/" // Referer လိမ်ထည့်မယ်
+        }
     });
     
-    const html = await embedRes.text();
-    const m3u8Regex = /file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/;
-    const match = html.match(m3u8Regex);
+    const html = await pageRes.text();
+
+    // Regular Expression နဲ့ .m3u8 ကို ရှာမယ်
+    const regex = /file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/;
+    const match = html.match(regex);
 
     if (match && match[1]) {
-      const realM3u8 = match[1];
-      const proxyLink = reqUrl.origin + "/?url=" + encodeURIComponent(realM3u8);
-      return Response.redirect(proxyLink, 302);
+        // တွေ့ပြီ! M3U8 Link အစစ်ကို Deno Proxy နဲ့ ပြန်ထုတ်ပေးမယ်
+        const realVideoLink = match[1];
+        const finalProxyLink = reqUrl.origin + "/?url=" + encodeURIComponent(realVideoLink);
+        
+        // Player ဆီကို Redirect လုပ်ပေးလိုက်မယ် (Play တန်းဖြစ်သွားအောင်)
+        return Response.redirect(finalProxyLink, 302);
     } else {
-      return new Response("Error: Video Link not found via Proxy.", { status: 404 });
+        // မတွေ့ရင် HTML ကို ပြန်ထုတ်ကြည့်မယ် (Debug ရအောင်)
+        console.log("Failed HTML:", html.substring(0, 500)); // Logs မှာ ကြည့်ဖို့
+        return new Response("❌ Error: StreamWish က Link ကို ဝှက်ထားပါတယ်။ (Packed JS Detected)", { status: 404 });
     }
 
-  } catch (err) {
-    return new Response("Server Error: " + err.message, { status: 500 });
+  } catch (e) {
+    return new Response("Server Error: " + e.message, { status: 500 });
   }
 });
